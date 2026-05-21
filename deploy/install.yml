@@ -1,0 +1,143 @@
+---
+- name: Deploy Evo CRM Community behind nginx-proxy
+  hosts: all
+  become: true
+  gather_facts: false
+
+  vars:
+    install_root: /root/projects/evo-crm-community
+    proxy_root: /root/projects/nginx-proxy
+    letsencrypt_email: admin@example.com
+    mailer_sender_email: no-reply@example.com
+    smtp_address: smtp.mailgun.org
+    smtp_port: "465"
+    smtp_domain: example.com
+    smtp_authentication: login
+    smtp_enable_starttls_auto: "false"
+    smtp_ssl: "true"
+    smtp_username: no-reply@example.com
+    smtp_password: ""
+    backend_host: "api.{{ site_dns }}"
+    frontend_host: "{{ site_dns }}"
+    backend_url: "https://{{ backend_host }}"
+    frontend_url: "https://{{ frontend_host }}"
+    cors_origins: "{{ frontend_url }},{{ backend_url }}"
+
+  pre_tasks:
+    - name: Validate the requested DNS name
+      ansible.builtin.assert:
+        that:
+          - site_dns is defined
+          - site_dns | length > 0
+          - site_dns is not search('^https?://')
+          - site_dns is not search('/')
+        fail_msg: "Pass only the DNS name, for example: site_dns=evo.example.com"
+
+    - name: Ensure the app repository exists on the host
+      ansible.builtin.stat:
+        path: "{{ install_root }}/docker-compose.yml"
+      register: app_repo
+
+    - name: Stop if the app repository is missing
+      ansible.builtin.fail:
+        msg: "Missing {{ install_root }}/docker-compose.yml on the target host."
+      when: not app_repo.stat.exists
+
+    - name: Ensure the shared proxy repository exists on the host
+      ansible.builtin.stat:
+        path: "{{ proxy_root }}/docker-compose.yml"
+      register: proxy_repo
+
+    - name: Stop if the proxy repository is missing
+      ansible.builtin.fail:
+        msg: "Missing {{ proxy_root }}/docker-compose.yml on the target host."
+      when: not proxy_repo.stat.exists
+
+  tasks:
+    - name: Write the domain-specific environment file
+      ansible.builtin.copy:
+        dest: "{{ install_root }}/.env"
+        mode: "0640"
+        content: |
+          BACKEND_HOST={{ backend_host }}
+          FRONTEND_HOST={{ frontend_host }}
+          BACKEND_URL={{ backend_url }}
+          FRONTEND_URL={{ frontend_url }}
+          CORS_ORIGINS={{ cors_origins }}
+          LETSENCRYPT_EMAIL={{ letsencrypt_email }}
+          MAILER_SENDER_EMAIL={{ mailer_sender_email }}
+          SMTP_ADDRESS={{ smtp_address }}
+          SMTP_PORT={{ smtp_port }}
+          SMTP_DOMAIN={{ smtp_domain }}
+          SMTP_AUTHENTICATION={{ smtp_authentication }}
+          SMTP_ENABLE_STARTTLS_AUTO={{ smtp_enable_starttls_auto }}
+          SMTP_SSL={{ smtp_ssl }}
+          SMTP_USERNAME={{ smtp_username }}
+          SMTP_PASSWORD={{ smtp_password }}
+
+    - name: Ensure the shared reverse-proxy network exists
+      ansible.builtin.command:
+        argv:
+          - docker
+          - network
+          - inspect
+          - reverse-proxy
+      register: reverse_proxy_network
+      changed_when: false
+      failed_when: false
+
+    - name: Create the shared reverse-proxy network if needed
+      ansible.builtin.command:
+        argv:
+          - docker
+          - network
+          - create
+          - reverse-proxy
+      when: reverse_proxy_network.rc != 0
+
+    - name: Start the shared proxy stack
+      ansible.builtin.command:
+        argv:
+          - docker
+          - compose
+          - up
+          - -d
+      args:
+        chdir: "{{ proxy_root }}"
+
+    - name: Start the Evo CRM Community stack
+      ansible.builtin.command:
+        argv:
+          - docker
+          - compose
+          - --env-file
+          - .env
+          - -f
+          - docker-compose.yml
+          - up
+          - -d
+          - --remove-orphans
+      args:
+        chdir: "{{ install_root }}"
+
+    - name: Wait for the frontend to answer over HTTPS
+      ansible.builtin.uri:
+        url: "https://{{ frontend_host }}"
+        method: GET
+        status_code: 200
+        validate_certs: false
+      register: frontend_check
+      retries: 30
+      delay: 5
+      until: frontend_check.status == 200
+
+    - name: Wait for the API health endpoint to answer over HTTPS
+      ansible.builtin.uri:
+        url: "https://{{ backend_host }}/health/ready"
+        method: GET
+        status_code: 200
+        validate_certs: false
+      register: backend_check
+      retries: 30
+      delay: 5
+      until: backend_check.status == 200
