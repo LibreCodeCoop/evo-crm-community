@@ -21,6 +21,7 @@
     frontend_host: "{{ site_dns }}"
     backend_url: "https://{{ backend_host }}"
     frontend_url: "https://{{ frontend_host }}"
+    auth_service_url: "{{ backend_url }}"
     cors_origins: "{{ frontend_url }},{{ backend_url }}"
 
   pre_tasks:
@@ -63,6 +64,7 @@
           FRONTEND_HOST={{ frontend_host }}
           BACKEND_URL={{ backend_url }}
           FRONTEND_URL={{ frontend_url }}
+          AUTH_SERVICE_URL={{ auth_service_url }}
           CORS_ORIGINS={{ cors_origins }}
           LETSENCRYPT_EMAIL={{ letsencrypt_email }}
           MAILER_SENDER_EMAIL={{ mailer_sender_email }}

@@ -105,6 +105,7 @@ services:
       POSTGRES_PASSWORD: evoai_dev_password
       POSTGRES_DATABASE: evo_community
       REDIS_URL: redis://:evoai_redis_pass@evo_redis:6379/1
+      AUTH_SERVICE_URL: "${AUTH_SERVICE_URL:-http://api.localhost}"
       FRONTEND_URL: "${FRONTEND_URL:-http://app.localhost}"
       MAILER_SENDER_EMAIL: "${MAILER_SENDER_EMAIL:-no-reply@example.com}"
       SMTP_ADDRESS: "${SMTP_ADDRESS:-smtp.mailgun.org}"
@@ -158,6 +159,7 @@ services:
       POSTGRES_PASSWORD: evoai_dev_password
       POSTGRES_DATABASE: evo_community
       REDIS_URL: redis://:evoai_redis_pass@evo_redis:6379/1
+      AUTH_SERVICE_URL: "${AUTH_SERVICE_URL:-http://api.localhost}"
       FRONTEND_URL: "${FRONTEND_URL:-http://app.localhost}"
       MAILER_SENDER_EMAIL: "${MAILER_SENDER_EMAIL:-no-reply@example.com}"
       SMTP_ADDRESS: "${SMTP_ADDRESS:-smtp.mailgun.org}"

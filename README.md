@@ -29,3 +29,6 @@ accept browser requests from both public hosts:
 
 - `https://{{ site_dns }}`
 - `https://api.{{ site_dns }}`
+
+It also sets `AUTH_SERVICE_URL` to the public API host so confirmation and
+password-reset links are generated without the internal `:3001` port.
