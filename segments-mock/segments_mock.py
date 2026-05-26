@@ -65,7 +65,13 @@ def read_json_body(handler: BaseHTTPRequestHandler) -> dict:
 
 def pagination_payload(items: list[dict], query: dict[str, list[str]]) -> dict:
     page = max(1, int(query.get("page", ["1"])[0] or "1"))
-    page_size = int(query.get("page_size", query.get("per_page", query.get("pageSize", ["20"])))[0] or "20")
+    page_size = int(
+        query.get(
+            "page_size",
+            query.get("per_page", query.get("pageSize", query.get("limit", ["20"]))),
+        )[0]
+        or "20"
+    )
     total = len(items)
     total_pages = (total + page_size - 1) // page_size if page_size > 0 else 0
     start = (page - 1) * page_size
@@ -92,6 +98,9 @@ def default_segment(payload: dict | None = None) -> dict:
         "name": payload.get("name") or "Novo Segmento",
         "description": payload.get("description") or "",
         "status": payload.get("status") or payload.get("active") or "draft",
+        "contactsCount": payload.get("contactsCount") or payload.get("computedCount") or 0,
+        "computedCount": payload.get("computedCount") or payload.get("contactsCount") or 0,
+        "lastComputedAt": payload.get("lastComputedAt") or None,
         "filters": payload.get("filters") or payload.get("conditions") or [],
         "createdAt": now_iso(),
         "updatedAt": now_iso(),
@@ -143,6 +152,23 @@ def delete_segment(segment_id: str) -> bool:
         return True
 
 
+def recompute_segments() -> list[dict]:
+    now = now_iso()
+    with LOCK:
+        segments = load_state()
+        recomputed: list[dict] = []
+        for current in segments:
+            updated = deepcopy(current)
+            updated["status"] = "ready"
+            updated["lastComputedAt"] = now
+            updated["updatedAt"] = now
+            updated["computedCount"] = int(updated.get("computedCount") or updated.get("contactsCount") or 0)
+            updated["contactsCount"] = int(updated.get("contactsCount") or updated["computedCount"] or 0)
+            recomputed.append(updated)
+        save_state(recomputed)
+        return recomputed
+
+
 class SegmentsHandler(BaseHTTPRequestHandler):
     server_version = "segments-mock/1.0"
 
@@ -189,6 +215,19 @@ class SegmentsHandler(BaseHTTPRequestHandler):
     def do_POST(self) -> None:
         path = normalize_path(self.path)
         body = read_json_body(self)
+
+        if path == "/api/v1/segments/recompute-all":
+            self._send(
+                HTTPStatus.OK,
+                {
+                    "data": recompute_segments(),
+                    "meta": {
+                        "recomputed_at": now_iso(),
+                        "total": len(load_state()),
+                    },
+                },
+            )
+            return
 
         if path == "/api/v1/segments":
             self._send(HTTPStatus.CREATED, persist_create(body))
