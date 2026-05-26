@@ -373,6 +373,20 @@ services:
       PORT: "8090"
 
   # ---------------------------------------------------------------------------
+  # Segments Mock API (temporary compatibility layer)
+  # ---------------------------------------------------------------------------
+  evo_segments_mock:
+    build:
+      context: ./segments-mock
+    networks:
+      - internal
+    volumes:
+      - evo_segments_mock_data:/data
+    environment:
+      SEGMENTS_STATE_FILE: /data/segments.json
+      PORT: "8091"
+
+  # ---------------------------------------------------------------------------
   # Frontend (React / Vite / Nginx) — Port 5173
   # ---------------------------------------------------------------------------
   evo_frontend:
@@ -405,3 +419,4 @@ volumes:
   evo_redis_data:
   evo_processor_logs:
   evo_journeys_mock_data:
+  evo_segments_mock_data:
