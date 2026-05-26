@@ -322,6 +322,8 @@ services:
       ENCRYPTION_KEY: XoQPOBw2FrzjQS11utERG9qO2MsAnXFxlhIns_uUxRk=
       EVOAI_CRM_API_TOKEN: 6e10e689-58ce-4416-bf0d-f5818bf2dcf8
       EVO_AI_CRM_URL: http://evo_crm:3000
+      AUTH_SERVICE_URL: http://evo_auth:3001
+      EVO_AUTH_BASE_URL: http://evo_auth:3001
       CORE_SERVICE_URL: http://evo_core:5555/api/v1
       APP_URL: "${BACKEND_URL:-http://api.localhost}"
       API_TITLE: Agent Processor Community
