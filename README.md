@@ -32,3 +32,7 @@ accept browser requests from both public hosts:
 
 It also sets `AUTH_SERVICE_URL` to the public API host so confirmation and
 password-reset links are generated without the internal `:3001` port.
+
+The journeys screen is currently backed by a local compatibility service in
+this repository so newly created journeys persist in the stack and reappear in
+the list until the real backend gains native journey storage.

@@ -359,6 +359,20 @@ services:
         condition: service_healthy
 
   # ---------------------------------------------------------------------------
+  # Journeys Mock API (temporary compatibility layer)
+  # ---------------------------------------------------------------------------
+  evo_journeys_mock:
+    build:
+      context: ./journeys-mock
+    networks:
+      - internal
+    volumes:
+      - evo_journeys_mock_data:/data
+    environment:
+      JOURNEYS_STATE_FILE: /data/journeys.json
+      PORT: "8090"
+
+  # ---------------------------------------------------------------------------
   # Frontend (React / Vite / Nginx) — Port 5173
   # ---------------------------------------------------------------------------
   evo_frontend:
@@ -390,3 +404,4 @@ volumes:
   evo_postgres_data:
   evo_redis_data:
   evo_processor_logs:
+  evo_journeys_mock_data:
