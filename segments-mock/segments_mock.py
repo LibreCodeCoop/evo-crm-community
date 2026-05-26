@@ -78,6 +78,10 @@ def pagination_payload(items: list[dict], query: dict[str, list[str]]) -> dict:
     end = start + page_size
     page_items = items[start:end] if page_size > 0 else items
     return {
+        "segments": page_items,
+        "page": page,
+        "limit": page_size,
+        "total": total,
         "data": page_items,
         "meta": {
             "pagination": {
@@ -94,16 +98,23 @@ def pagination_payload(items: list[dict], query: dict[str, list[str]]) -> dict:
 
 def default_segment(payload: dict | None = None) -> dict:
     payload = payload or {}
+    now = now_iso()
+    contacts_count = int(payload.get("contactsCount") or payload.get("computedCount") or 0)
     return {
         "name": payload.get("name") or "Novo Segmento",
         "description": payload.get("description") or "",
         "status": payload.get("status") or payload.get("active") or "draft",
-        "contactsCount": payload.get("contactsCount") or payload.get("computedCount") or 0,
-        "computedCount": payload.get("computedCount") or payload.get("contactsCount") or 0,
+        "contactsCount": contacts_count,
+        "computedCount": int(payload.get("computedCount") or contacts_count),
         "lastComputedAt": payload.get("lastComputedAt") or None,
         "filters": payload.get("filters") or payload.get("conditions") or [],
-        "createdAt": now_iso(),
-        "updatedAt": now_iso(),
+        "createdAt": now,
+        "updatedAt": now,
+        "created_at": now,
+        "updated_at": now,
+        "contacts_count": contacts_count,
+        "computed_count": int(payload.get("computedCount") or contacts_count),
+        "last_computed_at": payload.get("lastComputedAt") or None,
     }
 
 
@@ -159,11 +170,15 @@ def recompute_segments() -> list[dict]:
         recomputed: list[dict] = []
         for current in segments:
             updated = deepcopy(current)
-            updated["status"] = "ready"
             updated["lastComputedAt"] = now
             updated["updatedAt"] = now
+            updated["created_at"] = updated.get("created_at") or updated.get("createdAt") or now
+            updated["updated_at"] = now
             updated["computedCount"] = int(updated.get("computedCount") or updated.get("contactsCount") or 0)
             updated["contactsCount"] = int(updated.get("contactsCount") or updated["computedCount"] or 0)
+            updated["computed_count"] = updated["computedCount"]
+            updated["contacts_count"] = updated["contactsCount"]
+            updated["last_computed_at"] = now
             recomputed.append(updated)
         save_state(recomputed)
         return recomputed
@@ -201,6 +216,22 @@ class SegmentsHandler(BaseHTTPRequestHandler):
             self._send(HTTPStatus.OK, pagination_payload(load_state(), query))
             return
 
+        if path.startswith("/api/v1/segments/") and path.endswith("/contact-ids"):
+            segment_id = path.split("/")[-2]
+            segment = find_segment(segment_id)
+            if segment is None:
+                self._send(HTTPStatus.NOT_FOUND, {"error": "Segment not found"})
+            else:
+                self._send(
+                    HTTPStatus.OK,
+                    {
+                        "contactIds": [],
+                        "segmentId": segment_id,
+                        "total": 0,
+                    },
+                )
+            return
+
         if path.startswith("/api/v1/segments/"):
             segment_id = path.rsplit("/", 1)[-1]
             segment = find_segment(segment_id)
@@ -217,20 +248,49 @@ class SegmentsHandler(BaseHTTPRequestHandler):
         body = read_json_body(self)
 
         if path == "/api/v1/segments/recompute-all":
+            recomputed = recompute_segments()
             self._send(
                 HTTPStatus.OK,
                 {
-                    "data": recompute_segments(),
-                    "meta": {
-                        "recomputed_at": now_iso(),
-                        "total": len(load_state()),
-                    },
+                    "results": [{"id": segment.get("id"), "success": True} for segment in recomputed],
+                    "totalProcessingTimeMs": 1,
+                    "data": recomputed,
+                    "segments": recomputed,
+                    "total": len(recomputed),
                 },
             )
             return
 
         if path == "/api/v1/segments":
             self._send(HTTPStatus.CREATED, persist_create(body))
+            return
+
+        if path.startswith("/api/v1/segments/") and path.endswith("/recompute"):
+            segment_id = path.split("/")[-2]
+            segment = find_segment(segment_id)
+            if segment is None:
+                self._send(HTTPStatus.NOT_FOUND, {"error": "Segment not found"})
+                return
+            updated = deepcopy(segment)
+            updated["lastComputedAt"] = now_iso()
+            updated["updatedAt"] = now_iso()
+            updated["last_computed_at"] = updated["lastComputedAt"]
+            with LOCK:
+                segments = load_state()
+                for index, current in enumerate(segments):
+                    if current.get("id") == segment_id:
+                        segments[index] = updated
+                        save_state(segments)
+                        break
+            self._send(
+                HTTPStatus.OK,
+                {
+                    "success": True,
+                    "segment": updated,
+                    "results": [{"id": segment_id, "success": True}],
+                    "totalProcessingTimeMs": 1,
+                },
+            )
             return
 
         self._send(HTTPStatus.NOT_FOUND, {"error": "Not found"})
