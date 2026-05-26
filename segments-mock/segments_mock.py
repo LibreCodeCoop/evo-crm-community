@@ -9,12 +9,16 @@ from datetime import datetime, timezone
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from urllib.parse import parse_qs, urlparse
+from urllib.error import HTTPError, URLError
+from urllib.parse import parse_qs, urlencode, urlparse
+from urllib.request import Request, urlopen
 
 
 STATE_FILE = Path(os.getenv("SEGMENTS_STATE_FILE", "/data/segments.json"))
 PORT = int(os.getenv("PORT", "8091"))
+API_BASE_URL = os.getenv("API_BASE_URL", "https://api.evo.librecode.coop/api/v1").rstrip("/")
 LOCK = threading.Lock()
+CONTACTS_PAGE_SIZE = int(os.getenv("SEGMENTS_CONTACTS_PAGE_SIZE", "200"))
 
 
 def now_iso() -> str:
@@ -63,6 +67,129 @@ def read_json_body(handler: BaseHTTPRequestHandler) -> dict:
     return decoded if isinstance(decoded, dict) else {}
 
 
+def request_json(path: str, auth_header: str | None = None, params: dict[str, object] | None = None) -> dict | list:
+    query = f"?{urlencode(params)}" if params else ""
+    url = f"{API_BASE_URL}/{path.lstrip('/')}{query}"
+    request = Request(url, headers={"Accept": "application/json"})
+    if auth_header:
+        request.add_header("Authorization", auth_header)
+    with urlopen(request, timeout=15) as response:
+        raw = response.read()
+    if not raw:
+        return {}
+    try:
+        return json.loads(raw.decode("utf-8"))
+    except json.JSONDecodeError:
+        return {}
+
+
+def extract_items(payload: dict | list) -> list[dict]:
+    if isinstance(payload, list):
+        return payload if all(isinstance(item, dict) for item in payload) else []
+    if not isinstance(payload, dict):
+        return []
+    for key in ("data", "contacts", "results", "items"):
+        value = payload.get(key)
+        if isinstance(value, list):
+            return [item for item in value if isinstance(item, dict)]
+    return []
+
+
+def extract_contact_id(item: dict) -> str | None:
+    for key in ("id", "contact_id", "contactId", "uuid"):
+        value = item.get(key)
+        if value not in (None, ""):
+            return str(value)
+    return None
+
+
+def fetch_all_contact_ids(auth_header: str | None) -> list[str]:
+    if not auth_header:
+        return []
+
+    ids: list[str] = []
+    seen: set[str] = set()
+
+    try:
+        payload = request_json("/contacts/all", auth_header=auth_header)
+        for item in extract_items(payload):
+            contact_id = extract_contact_id(item)
+            if contact_id and contact_id not in seen:
+                seen.add(contact_id)
+                ids.append(contact_id)
+        if ids:
+            return ids
+    except (HTTPError, URLError, TimeoutError, OSError, ValueError):
+        pass
+
+    page = 1
+    while True:
+        try:
+            payload = request_json(
+                "/contacts",
+                auth_header=auth_header,
+                params={"page": page, "limit": CONTACTS_PAGE_SIZE},
+            )
+        except (HTTPError, URLError, TimeoutError, OSError, ValueError):
+            break
+
+        items = extract_items(payload)
+        for item in items:
+            contact_id = extract_contact_id(item)
+            if contact_id and contact_id not in seen:
+                seen.add(contact_id)
+                ids.append(contact_id)
+
+        pagination = {}
+        if isinstance(payload, dict):
+            pagination = (payload.get("meta") or {}).get("pagination") or {}
+        total_pages = pagination.get("total_pages")
+        if total_pages is not None:
+            try:
+                total_pages = int(total_pages)
+            except (TypeError, ValueError):
+                total_pages = None
+        if total_pages is not None:
+            if page >= total_pages:
+                break
+        elif len(items) < CONTACTS_PAGE_SIZE:
+            break
+        page += 1
+
+    return ids
+
+
+def is_everyone_segment(payload: dict) -> bool:
+    definition = payload.get("definition")
+    if not isinstance(definition, dict):
+        return False
+    entry_node = definition.get("entryNode")
+    return isinstance(entry_node, dict) and entry_node.get("type") == "Everyone"
+
+
+def apply_segment_computation(segment: dict, auth_header: str | None) -> dict:
+    updated = deepcopy(segment)
+    updated["updatedAt"] = now_iso()
+    updated["updated_at"] = updated["updatedAt"]
+    if is_everyone_segment(updated):
+        contact_ids = fetch_all_contact_ids(auth_header)
+        updated["contactIds"] = contact_ids
+        updated["contactsCount"] = len(contact_ids)
+        updated["computedCount"] = len(contact_ids)
+        updated["contacts_count"] = len(contact_ids)
+        updated["computed_count"] = len(contact_ids)
+        updated["status"] = "running"
+        updated["lastComputedAt"] = updated["updatedAt"]
+        updated["last_computed_at"] = updated["updatedAt"]
+    else:
+        updated.setdefault("contactIds", [])
+        updated.setdefault("contactsCount", int(updated.get("contactsCount") or 0))
+        updated.setdefault("computedCount", int(updated.get("computedCount") or updated.get("contactsCount") or 0))
+        updated.setdefault("contacts_count", int(updated.get("contactsCount") or 0))
+        updated.setdefault("computed_count", int(updated.get("computedCount") or updated.get("contactsCount") or 0))
+    return updated
+
+
 def pagination_payload(items: list[dict], query: dict[str, list[str]]) -> dict:
     page = max(1, int(query.get("page", ["1"])[0] or "1"))
     page_size = int(
@@ -103,9 +230,11 @@ def default_segment(payload: dict | None = None) -> dict:
         "name": payload.get("name") or "Novo Segmento",
         "description": payload.get("description") or "",
         "status": payload.get("status") or payload.get("active") or "draft",
+        "definition": payload.get("definition") or {"entryNode": {"id": "entry", "type": "And"}},
         "contactsCount": contacts_count,
         "computedCount": int(payload.get("computedCount") or contacts_count),
         "lastComputedAt": payload.get("lastComputedAt") or None,
+        "contactIds": payload.get("contactIds") or [],
         "filters": payload.get("filters") or payload.get("conditions") or [],
         "createdAt": now,
         "updatedAt": now,
@@ -117,11 +246,12 @@ def default_segment(payload: dict | None = None) -> dict:
     }
 
 
-def persist_create(payload: dict) -> dict:
+def persist_create(payload: dict, auth_header: str | None = None) -> dict:
     segment = {
         "id": str(uuid.uuid4()),
         **default_segment(payload),
     }
+    segment = apply_segment_computation(segment, auth_header)
     with LOCK:
         segments = load_state()
         segments.insert(0, segment)
@@ -129,7 +259,7 @@ def persist_create(payload: dict) -> dict:
     return segment
 
 
-def persist_update(segment_id: str, payload: dict) -> dict | None:
+def persist_update(segment_id: str, payload: dict, auth_header: str | None = None) -> dict | None:
     with LOCK:
         segments = load_state()
         for index, current in enumerate(segments):
@@ -138,7 +268,7 @@ def persist_update(segment_id: str, payload: dict) -> dict | None:
             updated = deepcopy(current)
             updated.update(default_segment(payload))
             updated["id"] = segment_id
-            updated["updatedAt"] = now_iso()
+            updated = apply_segment_computation(updated, auth_header)
             segments[index] = updated
             save_state(segments)
             return updated
@@ -162,13 +292,13 @@ def delete_segment(segment_id: str) -> bool:
         return True
 
 
-def recompute_segments() -> list[dict]:
+def recompute_segments(auth_header: str | None) -> list[dict]:
     now = now_iso()
     with LOCK:
         segments = load_state()
         recomputed: list[dict] = []
         for current in segments:
-            updated = deepcopy(current)
+            updated = apply_segment_computation(current, auth_header)
             updated["lastComputedAt"] = now
             updated["updatedAt"] = now
             updated["created_at"] = updated.get("created_at") or updated.get("createdAt") or now
@@ -221,12 +351,21 @@ class SegmentsHandler(BaseHTTPRequestHandler):
             if segment is None:
                 self._send(HTTPStatus.NOT_FOUND, {"error": "Segment not found"})
             else:
+                if is_everyone_segment(segment) and not segment.get("contactIds"):
+                    segment = apply_segment_computation(segment, self.headers.get("Authorization"))
+                    with LOCK:
+                        segments = load_state()
+                        for index, current in enumerate(segments):
+                            if current.get("id") == segment_id:
+                                segments[index] = segment
+                                save_state(segments)
+                                break
                 self._send(
                     HTTPStatus.OK,
                     {
-                        "contactIds": [],
+                        "contactIds": segment.get("contactIds") or [],
                         "segmentId": segment_id,
-                        "total": 0,
+                        "total": len(segment.get("contactIds") or []),
                     },
                 )
             return
@@ -247,7 +386,7 @@ class SegmentsHandler(BaseHTTPRequestHandler):
         body = read_json_body(self)
 
         if path == "/api/v1/segments/recompute-all":
-            recomputed = recompute_segments()
+            recomputed = recompute_segments(self.headers.get("Authorization"))
             self._send(
                 HTTPStatus.OK,
                 {
@@ -260,7 +399,7 @@ class SegmentsHandler(BaseHTTPRequestHandler):
             return
 
         if path == "/api/v1/segments":
-            self._send(HTTPStatus.CREATED, persist_create(body))
+            self._send(HTTPStatus.CREATED, persist_create(body, self.headers.get("Authorization")))
             return
 
         if path.startswith("/api/v1/segments/") and path.endswith("/recompute"):
@@ -269,9 +408,9 @@ class SegmentsHandler(BaseHTTPRequestHandler):
             if segment is None:
                 self._send(HTTPStatus.NOT_FOUND, {"error": "Segment not found"})
                 return
-            updated = deepcopy(segment)
+            updated = apply_segment_computation(segment, self.headers.get("Authorization"))
             updated["lastComputedAt"] = now_iso()
-            updated["updatedAt"] = now_iso()
+            updated["updatedAt"] = updated["lastComputedAt"]
             updated["last_computed_at"] = updated["lastComputedAt"]
             with LOCK:
                 segments = load_state()
@@ -299,7 +438,7 @@ class SegmentsHandler(BaseHTTPRequestHandler):
 
         if path.startswith("/api/v1/segments/"):
             segment_id = path.rsplit("/", 1)[-1]
-            segment = persist_update(segment_id, body)
+            segment = persist_update(segment_id, body, self.headers.get("Authorization"))
             if segment is None:
                 self._send(HTTPStatus.NOT_FOUND, {"error": "Segment not found"})
             else:
