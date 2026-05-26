@@ -82,7 +82,6 @@ def pagination_payload(items: list[dict], query: dict[str, list[str]]) -> dict:
         "page": page,
         "limit": page_size,
         "total": total,
-        "data": page_items,
         "meta": {
             "pagination": {
                 "page": page,
@@ -254,7 +253,6 @@ class SegmentsHandler(BaseHTTPRequestHandler):
                 {
                     "results": [{"id": segment.get("id"), "success": True} for segment in recomputed],
                     "totalProcessingTimeMs": 1,
-                    "data": recomputed,
                     "segments": recomputed,
                     "total": len(recomputed),
                 },
