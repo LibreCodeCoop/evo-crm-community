@@ -1,37 +1,38 @@
 # evo-crm-community
 
+This repository contains the full Evo CRM community stack used for local
+development, production-style testing, and hosted deployment behind a shared
+reverse proxy.
+
 ## Deploy
 
-This repository is designed to run behind a shared `nginx-proxy` stack on the
-target VPS. The deployment playbook assumes:
+The full deploy guide lives in [docs/deploy.md](docs/deploy.md).
 
-- Docker is already installed on the server.
-- The repository exists at `/root/projects/evo-crm-community`.
-- The shared proxy stack exists at `/root/projects/nginx-proxy`.
-
-To deploy a new installation, pass only the public DNS name:
+In short, the production flow is:
 
 ```bash
 ansible-playbook -i motoko-new, deploy/install.yml -e site_dns=app.example.com
 ```
 
-The playbook derives the public hosts from `site_dns`:
+That playbook:
+
+- writes the environment file for the target host
+- creates the shared `reverse-proxy` Docker network when needed
+- starts the shared proxy stack
+- starts the Evo CRM stack
+- waits for the frontend and backend to answer over HTTPS
+
+The stack is designed to expose:
 
 - frontend: `https://{{ site_dns }}`
 - backend: `https://api.{{ site_dns }}`
 
-It also writes the `.env` file, ensures the `reverse-proxy` Docker network
-exists, starts the shared proxy stack, starts the app stack, and waits for the
-frontend and API health endpoint to respond over HTTPS.
+For an approximate footprint of the Docker images used by the stack, see
+[docs/image-sizes.md](docs/image-sizes.md).
 
-The generated `.env` also sets `CORS_ORIGINS` so the auth and CRM services
-accept browser requests from both public hosts:
+For proxy routing details, see [nginx/README.md](nginx/README.md).
 
-- `https://{{ site_dns }}`
-- `https://api.{{ site_dns }}`
-
-It also sets `AUTH_SERVICE_URL` to the public API host so confirmation and
-password-reset links are generated without the internal `:3001` port.
+## Included compatibility services
 
 The journeys screen is currently backed by a local compatibility service in
 this repository so newly created journeys persist in the stack and reappear in
