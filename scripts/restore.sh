@@ -27,12 +27,15 @@ backup_root="$root_dir/backups"
 if [[ $# -ge 1 ]]; then
   backup_dir="$1"
 else
-  if [[ ! -d "$backup_root" ]]; then
+  if [[ -d "$backup_root/current" ]]; then
+    backup_dir="$backup_root/current"
+  elif [[ ! -d "$backup_root" ]]; then
     echo "No backups directory found at $backup_root" >&2
     exit 1
+  else
+    backup_dir="$(find "$backup_root" -mindepth 1 -maxdepth 1 -type d ! -name current | sort | tail -n 1)"
   fi
 
-  backup_dir="$(find "$backup_root" -mindepth 1 -maxdepth 1 -type d | sort | tail -n 1)"
   if [[ -z "${backup_dir:-}" ]]; then
     echo "No backup directories found in $backup_root" >&2
     exit 1

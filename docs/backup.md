@@ -46,7 +46,7 @@ For cron jobs, use the bundled helper:
 make backup
 ```
 
-It writes a timestamped folder under `backups/` with:
+By default it writes a timestamped folder under `backups/` with:
 
 - `database.dump`
 - `.env`
@@ -62,6 +62,15 @@ different path:
 ```bash
 make backup BACKUP_ROOT=/var/backups/evo-crm-community
 ```
+
+If Duplicati is doing the history/versioning, use the overwrite mode instead:
+
+```bash
+make backup OVERWRITE=true
+```
+
+That writes into `backups/current/` by default and replaces the previous
+contents on each run.
 
 If you also want the named Docker volumes, enable the extra flag:
 
@@ -79,6 +88,12 @@ For a fuller snapshot:
 
 ```cron
 15 2 * * * cd /home/mohr/git/librecode/evo-crm-community && make backup WITH_VOLUMES=true >/tmp/evo-crm-backup.log 2>&1
+```
+
+For Duplicati-managed history:
+
+```cron
+15 2 * * * cd /home/mohr/git/librecode/evo-crm-community && make backup OVERWRITE=true >/tmp/evo-crm-backup.log 2>&1
 ```
 
 ## Restore the database
@@ -143,6 +158,7 @@ capture runtime state beyond the database.
   values when restoring.
 - If you changed hostnames, regenerate `.env` or rerun `scripts/bootstrap.sh`.
 - Volume tarballs are optional and only needed if you enabled `WITH_VOLUMES=true`.
+- If you used `OVERWRITE=true`, the default restore path is `backups/current`.
 
 ## Suggested cadence
 

@@ -3,13 +3,15 @@ set -euo pipefail
 
 usage() {
   cat <<'EOF'
-Usage: scripts/backup.sh [--with-volumes] [backup_root]
+Usage: scripts/backup.sh [--with-volumes] [--overwrite] [backup_root]
 
 Examples:
   scripts/backup.sh
   scripts/backup.sh /var/backups/evo-crm-community
   scripts/backup.sh --with-volumes
   scripts/backup.sh --with-volumes /var/backups/evo-crm-community
+  scripts/backup.sh --overwrite
+  scripts/backup.sh --overwrite /var/backups/evo-crm-community
 
 The script creates a timestamped backup directory containing:
   - database.dump
@@ -17,10 +19,14 @@ The script creates a timestamped backup directory containing:
   - .deploy-secrets.json, if present
   - compose files and a small manifest
   - volume tarballs when --with-volumes is set
+
+When --overwrite is set, the script writes to a stable `current/` directory
+inside the backup root and replaces the previous contents.
 EOF
 }
 
 with_volumes=false
+overwrite=false
 backup_root=""
 
 while [[ $# -gt 0 ]]; do
@@ -31,6 +37,9 @@ while [[ $# -gt 0 ]]; do
       ;;
     --with-volumes)
       with_volumes=true
+      ;;
+    --overwrite)
+      overwrite=true
       ;;
     -*)
       echo "Unknown option: $1" >&2
@@ -52,7 +61,12 @@ done
 root_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 backup_root="${backup_root:-$root_dir/backups}"
 timestamp="$(date +%Y%m%d_%H%M%S)"
-backup_dir="$backup_root/$timestamp"
+if [[ "$overwrite" == true ]]; then
+  backup_dir="$backup_root/current"
+  rm -rf "$backup_dir"
+else
+  backup_dir="$backup_root/$timestamp"
+fi
 volumes_dir="$backup_dir/volumes"
 
 mkdir -p "$backup_dir"
@@ -76,6 +90,7 @@ if git -C "$root_dir" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
     echo "branch=$(git -C "$root_dir" branch --show-current)"
     echo "created_at=$timestamp"
     echo "with_volumes=$with_volumes"
+    echo "overwrite=$overwrite"
   } > "$backup_dir/manifest.txt"
 fi
 
