@@ -1,0 +1,52 @@
+services:
+  evo_postgres:
+    labels:
+      - com.centurylinklabs.watchtower.enable=true
+
+  evo_redis:
+    labels:
+      - com.centurylinklabs.watchtower.enable=true
+
+  evo_gateway:
+    labels:
+      - com.centurylinklabs.watchtower.enable=true
+
+  evo_auth:
+    labels:
+      - com.centurylinklabs.watchtower.enable=true
+
+  evo_auth_sidekiq:
+    labels:
+      - com.centurylinklabs.watchtower.enable=true
+
+  evo_crm:
+    labels:
+      - com.centurylinklabs.watchtower.enable=true
+
+  evo_crm_sidekiq:
+    labels:
+      - com.centurylinklabs.watchtower.enable=true
+
+  evo_core:
+    labels:
+      - com.centurylinklabs.watchtower.enable=true
+
+  evo_processor:
+    labels:
+      - com.centurylinklabs.watchtower.enable=true
+
+  evo_bot_runtime:
+    labels:
+      - com.centurylinklabs.watchtower.enable=true
+
+  evo_journeys_mock:
+    labels:
+      - com.centurylinklabs.watchtower.enable=true
+
+  evo_segments_mock:
+    labels:
+      - com.centurylinklabs.watchtower.enable=true
+
+  evo_frontend:
+    labels:
+      - com.centurylinklabs.watchtower.enable=true

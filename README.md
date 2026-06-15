@@ -41,6 +41,14 @@ The stack is designed to expose:
 For an approximate footprint of the Docker images used by the stack, see
 [docs/image-sizes.md](docs/image-sizes.md).
 
+For backups and restore steps, see [docs/backup.md](docs/backup.md).
+
+For a quick scheduled backup, use:
+
+```bash
+make backup
+```
+
 For proxy routing details, see [nginx/README.md](nginx/README.md).
 
 ## Included compatibility services
