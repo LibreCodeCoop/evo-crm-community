@@ -7,6 +7,7 @@ reverse proxy.
 ## Deploy
 
 The full deploy guide lives in [docs/deploy.md](docs/deploy.md).
+For the playbook itself, see [docs/install-playbook.md](docs/install-playbook.md).
 
 In short, the production flow is:
 
