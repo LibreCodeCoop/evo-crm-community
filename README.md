@@ -9,6 +9,16 @@ reverse proxy.
 The full deploy guide lives in [docs/deploy.md](docs/deploy.md).
 For the playbook itself, see [docs/install-playbook.md](docs/install-playbook.md).
 
+For a quick bootstrap after cloning, use:
+
+```bash
+make bootstrap SITE_DNS=app.example.com
+```
+
+That target wraps `scripts/bootstrap.sh`, which generates host secrets, writes
+`.env`, and starts the stack. If a shared `reverse-proxy` network is missing,
+it creates it first. It does not manage the proxy stack itself.
+
 In short, the production flow is:
 
 ```bash

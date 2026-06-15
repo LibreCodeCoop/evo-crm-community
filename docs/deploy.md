@@ -35,11 +35,12 @@ network named `reverse-proxy`.
 The install playbook is [deploy/install.yml](../deploy/install.yml). It:
 
 1. validates the requested DNS name
-2. writes a host-specific `.env` file
-3. ensures the shared `reverse-proxy` network exists
-4. starts the shared proxy stack
-5. starts this repository's app stack
-6. waits for the frontend and backend health checks over HTTPS
+2. creates or reuses a host-local `.deploy-secrets.json` file with secrets
+3. writes a host-specific `.env` file
+4. ensures the shared `reverse-proxy` network exists
+5. starts the shared proxy stack
+6. starts this repository's app stack
+7. waits for the frontend and backend health checks over HTTPS
 
 ## Quick deploy
 
@@ -47,6 +48,13 @@ Use only the public DNS name, without `http://` or a path:
 
 ```bash
 ansible-playbook -i motoko-new, deploy/install.yml -e site_dns=app.example.com
+```
+
+If you are bootstrapping a fresh clone locally or on a server where the app
+repository is already present, you can use the bundled script instead:
+
+```bash
+make bootstrap SITE_DNS=app.example.com
 ```
 
 The playbook derives the public hosts from `site_dns`:
@@ -61,7 +69,6 @@ If you need to deploy by hand, the equivalent sequence is:
 ```bash
 cd /root/projects/evo-crm-community
 docker network inspect reverse-proxy >/dev/null 2>&1 || docker network create reverse-proxy
-cd /root/projects/nginx-proxy && docker compose up -d
 cd /root/projects/evo-crm-community && docker compose --env-file .env up -d --remove-orphans
 ```
 
@@ -74,6 +81,14 @@ The `.env` file must set at least:
 - `AUTH_SERVICE_URL`
 - `CORS_ORIGINS`
 - `LETSENCRYPT_EMAIL`
+
+The install playbook also fills in the shared database passwords, app secrets,
+bot runtime secret, and the frontend `VITE_*` URLs so the deployed stack boots
+with a complete configuration.
+
+The generated secret values are stored on the target host in
+`/root/projects/evo-crm-community/.deploy-secrets.json` and reused on future
+runs.
 
 ## Important environment variables
 

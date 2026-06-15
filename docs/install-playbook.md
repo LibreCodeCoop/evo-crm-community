@@ -16,11 +16,12 @@ that already has Docker, the app repository, and the shared proxy repository.
 The playbook:
 
 1. validates the DNS name passed in `site_dns`
-2. writes a host-specific `.env` file into the app repository
-3. ensures the `reverse-proxy` Docker network exists
-4. starts the shared proxy stack
-5. starts the Evo CRM stack
-6. waits for the frontend and backend health checks over HTTPS
+2. creates or reuses a host-local `.deploy-secrets.json` file with secrets
+3. writes a host-specific `.env` file into the app repository
+4. ensures the `reverse-proxy` Docker network exists
+5. starts the shared proxy stack
+6. starts the Evo CRM stack
+7. waits for the frontend and backend health checks over HTTPS
 
 ## Basic usage
 
@@ -67,6 +68,23 @@ The playbook also writes the following values into `.env` on the target host:
 - `CORS_ORIGINS`
 - `LETSENCRYPT_EMAIL`
 - `MAILER_SENDER_EMAIL`
+- `POSTGRES_PASSWORD`
+- `REDIS_PASSWORD`
+- `SECRET_KEY_BASE`
+- `JWT_SECRET_KEY`
+- `DOORKEEPER_JWT_SECRET_KEY`
+- `ENCRYPTION_KEY`
+- `EVOAI_CRM_API_TOKEN`
+- `BOT_RUNTIME_SECRET`
+- `BOT_RUNTIME_URL`
+- `BOT_RUNTIME_POSTBACK_BASE_URL`
+- `EVO_AI_CRM_URL`
+- `EVO_AUTH_BASE_URL`
+- `EVOLUTION_BASE_URL`
+- `AI_PROCESSOR_URL`
+- `CORE_SERVICE_URL`
+- `LISTEN_ADDR`
+- `AI_CALL_TIMEOUT_SECONDS`
 - `SMTP_ADDRESS`
 - `SMTP_PORT`
 - `SMTP_DOMAIN`
@@ -75,6 +93,14 @@ The playbook also writes the following values into `.env` on the target host:
 - `SMTP_SSL`
 - `SMTP_USERNAME`
 - `SMTP_PASSWORD`
+- `VITE_API_URL`
+- `VITE_AUTH_API_URL`
+- `VITE_EVOAI_API_URL`
+- `VITE_AGENT_PROCESSOR_URL`
+
+The reusable secret values live in `{{ install_root }}/.deploy-secrets.json`
+on the target host. Re-running the playbook with the same repository keeps the
+same database password and app secrets.
 
 Most installs can keep the defaults in the playbook, but you should change the
 SMTP values if the client uses a different mail provider.
@@ -115,4 +141,3 @@ If a deploy fails, check:
 - the proxy stack is running
 - the app repository exists at the expected path
 - the backend logs for boot or migration failures
-

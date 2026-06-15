@@ -7,6 +7,7 @@
   vars:
     install_root: /root/projects/evo-crm-community
     proxy_root: /root/projects/nginx-proxy
+    secrets_file: "{{ install_root }}/.deploy-secrets.json"
     letsencrypt_email: admin@example.com
     mailer_sender_email: no-reply@example.com
     smtp_address: smtp.mailgun.org
@@ -54,11 +55,57 @@
         msg: "Missing {{ proxy_root }}/docker-compose.yml on the target host."
       when: not proxy_repo.stat.exists
 
+    - name: Ensure the deployment secrets file exists on the target host
+      ansible.builtin.command:
+        argv:
+          - python3
+          - -c
+          - |
+            import json
+            import pathlib
+            import secrets
+            import sys
+
+            path = pathlib.Path(sys.argv[1])
+            path.parent.mkdir(parents=True, exist_ok=True)
+
+            values = {
+                "POSTGRES_PASSWORD": secrets.token_urlsafe(18),
+                "REDIS_PASSWORD": secrets.token_urlsafe(18),
+                "SECRET_KEY_BASE": secrets.token_urlsafe(48),
+                "JWT_SECRET_KEY": None,
+                "DOORKEEPER_JWT_SECRET_KEY": None,
+                "ENCRYPTION_KEY": secrets.token_urlsafe(32),
+                "EVOAI_CRM_API_TOKEN": secrets.token_urlsafe(24),
+                "BOT_RUNTIME_SECRET": secrets.token_urlsafe(24),
+            }
+
+            values["JWT_SECRET_KEY"] = values["SECRET_KEY_BASE"]
+            values["DOORKEEPER_JWT_SECRET_KEY"] = values["SECRET_KEY_BASE"]
+
+            path.write_text(json.dumps(values, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+            path.chmod(0o600)
+          - "{{ secrets_file }}"
+      args:
+        creates: "{{ secrets_file }}"
+      no_log: true
+
+    - name: Load deployment secrets from the target host
+      ansible.builtin.slurp:
+        src: "{{ secrets_file }}"
+      register: deployment_secrets_raw
+      no_log: true
+
+    - name: Decode deployment secrets
+      ansible.builtin.set_fact:
+        deployment_secrets: "{{ deployment_secrets_raw.content | b64decode | from_json }}"
+      no_log: true
+
   tasks:
     - name: Write the domain-specific environment file
       ansible.builtin.copy:
         dest: "{{ install_root }}/.env"
-        mode: "0640"
+        mode: "0600"
         content: |
           BACKEND_HOST={{ backend_host }}
           FRONTEND_HOST={{ frontend_host }}
@@ -68,6 +115,28 @@
           CORS_ORIGINS={{ cors_origins }}
           LETSENCRYPT_EMAIL={{ letsencrypt_email }}
           MAILER_SENDER_EMAIL={{ mailer_sender_email }}
+          POSTGRES_HOST=postgres
+          POSTGRES_PORT=5432
+          POSTGRES_USERNAME=postgres
+          POSTGRES_PASSWORD={{ deployment_secrets.POSTGRES_PASSWORD }}
+          POSTGRES_DATABASE=evo_community
+          REDIS_PASSWORD={{ deployment_secrets.REDIS_PASSWORD }}
+          REDIS_URL=redis://:{{ deployment_secrets.REDIS_PASSWORD }}@redis:6379
+          SECRET_KEY_BASE={{ deployment_secrets.SECRET_KEY_BASE }}
+          JWT_SECRET_KEY={{ deployment_secrets.JWT_SECRET_KEY }}
+          DOORKEEPER_JWT_SECRET_KEY={{ deployment_secrets.DOORKEEPER_JWT_SECRET_KEY }}
+          ENCRYPTION_KEY={{ deployment_secrets.ENCRYPTION_KEY }}
+          EVOAI_CRM_API_TOKEN={{ deployment_secrets.EVOAI_CRM_API_TOKEN }}
+          BOT_RUNTIME_SECRET={{ deployment_secrets.BOT_RUNTIME_SECRET }}
+          BOT_RUNTIME_URL=http://evo_bot_runtime:8080
+          BOT_RUNTIME_POSTBACK_BASE_URL=http://evo_crm:3000
+          EVO_AI_CRM_URL=http://evo_crm:3000
+          EVO_AUTH_BASE_URL=http://evo_auth:3001
+          EVOLUTION_BASE_URL=http://evo_crm:3000
+          AI_PROCESSOR_URL=http://evo_processor:8000
+          CORE_SERVICE_URL=http://evo_core:5555/api/v1
+          LISTEN_ADDR=0.0.0.0:8080
+          AI_CALL_TIMEOUT_SECONDS=30
           SMTP_ADDRESS={{ smtp_address }}
           SMTP_PORT={{ smtp_port }}
           SMTP_DOMAIN={{ smtp_domain }}
@@ -76,6 +145,11 @@
           SMTP_SSL={{ smtp_ssl }}
           SMTP_USERNAME={{ smtp_username }}
           SMTP_PASSWORD={{ smtp_password }}
+          VITE_API_URL={{ backend_url }}
+          VITE_AUTH_API_URL={{ backend_url }}
+          VITE_EVOAI_API_URL={{ backend_url }}
+          VITE_AGENT_PROCESSOR_URL={{ backend_url }}
+      no_log: true
 
     - name: Ensure the shared reverse-proxy network exists
       ansible.builtin.command:
