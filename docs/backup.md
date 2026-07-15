@@ -129,13 +129,18 @@ If you want a fuller snapshot of runtime state, back up the named volumes as
 tarballs. The main one is PostgreSQL:
 
 ```bash
+project_name="$(basename "$PWD")"
 mkdir -p backups
 docker run --rm \
-  -v evo-crm-community_evo_postgres_data:/data \
+  -v "${project_name}_evo_postgres_data:/data" \
   -v "$PWD/backups":/backup \
   alpine:3.20 \
   sh -c 'cd /data && tar -czf /backup/evo_postgres_data.tar.gz .'
 ```
+
+If your Compose project name differs from the repository directory, replace
+`project_name` with the actual Compose project name. The named volume prefix is
+derived from that project name.
 
 Other volumes in this stack are:
 

@@ -31,6 +31,7 @@ services:
   # ---------------------------------------------------------------------------
   evo_postgres:
     image: pgvector/pgvector:pg16
+    restart: unless-stopped
     volumes:
       - evo_postgres_data:/var/lib/postgresql/data
     networks:
@@ -48,6 +49,7 @@ services:
 
   evo_redis:
     image: redis:alpine
+    restart: unless-stopped
     command:
       - sh
       - -c
@@ -69,6 +71,7 @@ services:
     build:
       context: ./nginx
       dockerfile: Dockerfile
+    restart: unless-stopped
     expose:
       - "3030"
     networks:
@@ -91,6 +94,7 @@ services:
   # ---------------------------------------------------------------------------
   evo_auth:
     image: evoapicloud/evo-auth-service-community:latest
+    restart: unless-stopped
     command: sh -c "bundle exec rails db:prepare && bundle exec rails s -p 3001 -b 0.0.0.0"
     networks:
       - internal
@@ -138,6 +142,7 @@ services:
 
   evo_auth_sidekiq:
     image: evoapicloud/evo-auth-service-community:latest
+    restart: unless-stopped
     command: sh -c "bundle exec sidekiq"
     # Disable inherited HTTP healthcheck - Sidekiq has no web server.
     healthcheck:
@@ -185,6 +190,7 @@ services:
   # ---------------------------------------------------------------------------
   evo_crm:
     image: evoapicloud/evo-ai-crm-community:latest
+    restart: unless-stopped
     command: sh -c "bundle exec rails db:prepare && bundle exec rails s -p 3000 -b 0.0.0.0"
     networks:
       - internal
@@ -232,6 +238,7 @@ services:
 
   evo_crm_sidekiq:
     image: evoapicloud/evo-ai-crm-community:latest
+    restart: unless-stopped
     command: ["bundle", "exec", "sidekiq", "-C", "config/sidekiq.yml"]
     # Disable inherited HTTP healthcheck - Sidekiq has no web server.
     healthcheck:
@@ -275,6 +282,7 @@ services:
   # ---------------------------------------------------------------------------
   evo_core:
     image: evoapicloud/evo-ai-core-service-community:latest
+    restart: unless-stopped
     networks:
       - internal
     environment:
@@ -306,6 +314,7 @@ services:
   # ---------------------------------------------------------------------------
   evo_processor:
     image: evoapicloud/evo-ai-processor-community:latest
+    restart: unless-stopped
     networks:
       - internal
     environment:
@@ -348,6 +357,7 @@ services:
   # ---------------------------------------------------------------------------
   evo_bot_runtime:
     image: evoapicloud/evo-bot-runtime:latest
+    restart: unless-stopped
     networks:
       - internal
     environment:
@@ -366,6 +376,7 @@ services:
   evo_journeys_mock:
     build:
       context: ./journeys-mock
+    restart: unless-stopped
     networks:
       - internal
     volumes:
@@ -380,6 +391,7 @@ services:
   evo_segments_mock:
     build:
       context: ./segments-mock
+    restart: unless-stopped
     networks:
       - internal
     volumes:

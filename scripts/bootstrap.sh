@@ -8,7 +8,11 @@ Usage: scripts/bootstrap.sh <site_dns> [letsencrypt_email]
 Example:
   scripts/bootstrap.sh app.example.com admin@example.com
 
-If a shared nginx-proxy repository is available at ../nginx-proxy or
+This script generates .env and .deploy-secrets.json for the local stack,
+creates the shared reverse-proxy network when needed, and starts the stack.
+
+If a shared nginx-proxy repository is available at ../nginx-proxy, start it
+before this stack or let Docker create the external network first.
 EOF
 }
 
@@ -21,6 +25,16 @@ if [[ $# -lt 1 ]]; then
   usage >&2
   exit 1
 fi
+
+require_cmd() {
+  if ! command -v "$1" >/dev/null 2>&1; then
+    echo "Missing required command: $1" >&2
+    exit 1
+  fi
+}
+
+require_cmd docker
+require_cmd python3
 
 site_dns="$1"
 letsencrypt_email="${2:-admin@example.com}"
