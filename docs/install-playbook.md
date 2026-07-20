@@ -105,6 +105,9 @@ same database password and app secrets.
 Most installs can keep the defaults in the playbook, but you should change the
 SMTP values if the client uses a different mail provider.
 
+For the complete IMAP, SMTP, Mailgun, DNS, and troubleshooting procedure, see
+[docs/email.md](email.md).
+
 ## Quick deploy
 
 This is the shortest supported invocation:
