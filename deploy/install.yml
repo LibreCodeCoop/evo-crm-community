@@ -11,11 +11,11 @@
     letsencrypt_email: admin@example.com
     mailer_sender_email: no-reply@example.com
     smtp_address: smtp.mailgun.org
-    smtp_port: "465"
+    smtp_port: "587"
     smtp_domain: example.com
     smtp_authentication: login
-    smtp_enable_starttls_auto: "false"
-    smtp_ssl: "true"
+    smtp_enable_starttls_auto: "true"
+    smtp_ssl: "false"
     smtp_username: no-reply@example.com
     smtp_password: ""
     backend_host: "api.{{ site_dns }}"

@@ -43,6 +43,9 @@ For an approximate footprint of the Docker images used by the stack, see
 
 For backups and restore steps, see [docs/backup.md](docs/backup.md).
 
+For the Graylog deployment notes on `motoko-new`, see
+[docs/graylog.md](docs/graylog.md).
+
 For a quick scheduled backup, use:
 
 ```bash

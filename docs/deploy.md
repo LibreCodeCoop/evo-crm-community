@@ -162,6 +162,7 @@ real deploy, replace the localhost defaults with the actual public domains.
 ## Related docs
 
 - [docs/backup.md](backup.md) for backup and restore steps
+- [docs/graylog.md](graylog.md) for the Graylog deployment notes on motoko-new
 - [nginx/README.md](../nginx/README.md) for the backend gateway routing table
 - [deploy/install.yml](../deploy/install.yml) for the Ansible flow
 - [docs/install-playbook.md](install-playbook.md) for playbook usage details
