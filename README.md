@@ -22,7 +22,7 @@ it creates it first. It does not manage the proxy stack itself.
 In short, the production flow is:
 
 ```bash
-ansible-playbook -i motoko-new, deploy/install.yml -e site_dns=app.example.com
+ansible-playbook -i standalone-host, deploy/install.yml -e site_dns=app.example.com
 ```
 
 That playbook:
@@ -43,8 +43,6 @@ For an approximate footprint of the Docker images used by the stack, see
 
 For backups and restore steps, see [docs/backup.md](docs/backup.md).
 
-For the Graylog deployment notes on `motoko-new`, see
-[docs/graylog.md](docs/graylog.md).
 
 For a quick scheduled backup, use:
 
